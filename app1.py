@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score
 
-# ✅ Must be the first Streamlit call
+# ✅ Set page config (must be the first Streamlit call)
 st.set_page_config(page_title="Loan Fraud Detection", page_icon="💰")
 
 # App Title
@@ -21,12 +21,11 @@ app_mode = st.sidebar.selectbox("Choose the app mode", ["About", "Prediction", "
 if app_mode == "About":
     st.write("""
     ## About
-    This is a machine learning-powered **Loan Fraud Detection** web app built using **Streamlit**.
+    This is a machine learning-powered Loan Fraud Detection web app built using **Streamlit**.
     
     - Upload your loan dataset
-    - Automatically train a Random Forest model
-    - Make predictions on new input data
-    - Visualize fraud distribution and correlations
+    - Train and visualize
+    - Make predictions whether a loan is fraudulent or not
     """)
 
 # Prediction Page
@@ -39,57 +38,48 @@ elif app_mode == "Prediction":
         st.write("### Dataset Preview")
         st.write(data.head())
 
-        # Handle missing values
-        if data.isnull().sum().sum() > 0:
-            st.warning("Missing values found. Filling numeric columns with median.")
-            data = data.fillna(data.median(numeric_only=True))
-
-        # Encode fraud column if it has Yes/No
+        # Convert 'fraud' column to binary if it's 'yes'/'no'
         if 'fraud' in data.columns:
             if data['fraud'].dtype == 'object':
-                data['fraud'] = data['fraud'].map({'Yes': 1, 'No': 0})
+                data['fraud'] = data['fraud'].map({'yes': 1, 'no': 0})
 
-            # Separate features and target
+            # Split into features and target
             X = data.drop('fraud', axis=1)
             y = data['fraud']
 
-            # Encode categorical columns
-            X_encoded = pd.get_dummies(X)
+            # Ensure all features are numeric (handle categorical)
+            X = pd.get_dummies(X)
 
-            # Train-test split
-            X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.3, random_state=42)
+            # Train/test split
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
             # Train model
             model = RandomForestClassifier(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
 
-            # Model Performance
+            # Display metrics
             st.write("### Model Performance")
-            st.write(f"✅ Accuracy Score: {accuracy_score(y_test, y_pred):.2f}")
+            st.write(f"Accuracy Score: {accuracy_score(y_test, y_pred):.2f}")
             st.text("Classification Report:")
             st.text(classification_report(y_test, y_pred))
 
-            # Prediction input form
+            # Prediction input
             st.write("---")
             st.write("### Predict Fraud for New Data")
             input_data = {}
-            st.write("Enter values for the following features:")
-            for col in X_encoded.columns:
-                val = st.number_input(f"{col}:", value=0.0)
+            for col in X.columns:
+                val = st.number_input(f"Enter {col}:", value=0.0)
                 input_data[col] = val
 
             if st.button("Predict"):
                 input_df = pd.DataFrame([input_data])
                 prediction = model.predict(input_df)[0]
-                if prediction == 1:
-                    st.error("⚠️ Prediction: Fraud Detected!")
-                else:
-                    st.success("✅ Prediction: Not Fraudulent")
+                st.success(f"✅ Prediction: {'Fraud Detected' if prediction == 1 else 'Not Fraudulent'}")
         else:
-            st.warning("⚠️ The dataset does not contain a 'fraud' column for prediction.")
+            st.warning("⚠️ The dataset does not contain a 'fraud' column.")
 
-# Exploratory Data Analysis
+# Exploratory Data Analysis Page
 elif app_mode == "Exploratory Data Analysis":
     st.write("## Upload your dataset for EDA")
     uploaded_file_eda = st.file_uploader("Upload a CSV file for EDA", type=["csv"])
@@ -102,26 +92,23 @@ elif app_mode == "Exploratory Data Analysis":
         st.write("### Dataset Description")
         st.write(data_eda.describe())
 
-        # Handle missing values
-        if data_eda.isnull().sum().sum() > 0:
-            st.warning("Missing values found. Displaying columns with missing values:")
-            st.write(data_eda.isnull().sum()[data_eda.isnull().sum() > 0])
-
-        # Fraud distribution chart
         if 'fraud' in data_eda.columns:
             if data_eda['fraud'].dtype == 'object':
-                data_eda['fraud'] = data_eda['fraud'].map({'Yes': 1, 'No': 0})
+                data_eda['fraud'] = data_eda['fraud'].map({'yes': 1, 'no': 0})
+
             st.write("### Fraud Distribution")
             st.bar_chart(data_eda['fraud'].value_counts())
 
-            # Correlation Heatmap
-            st.write("### Correlation Heatmap")
-            corr = data_eda.corr()
+        # Correlation Heatmap
+        st.write("### Correlation Heatmap")
+        numeric_data = data_eda.select_dtypes(include=[np.number])
+        if not numeric_data.empty:
+            corr = numeric_data.corr()
             fig, ax = plt.subplots(figsize=(10, 8))
-            sns.heatmap(corr, cmap='coolwarm', annot=False, ax=ax)
+            sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
             st.pyplot(fig)
         else:
-            st.warning("⚠️ 'fraud' column not found for distribution and correlation analysis.")
+            st.warning("No numeric columns available to plot correlation heatmap.")
 
 # Footer
 st.sidebar.write("---")
