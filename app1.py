@@ -6,19 +6,25 @@ import json
 import pickle
 from datetime import datetime
 
-# --- Load model & scaler ---
-with open("best_model.pkl", "rb") as f:
-    model_data = pickle.load(f)
-    model = model_data["model"]
-    feature_names = model_data["feature_names"]
+# --- Cache the model & scaler loading for faster reloads ---
+@st.cache_resource
+def load_model():
+    with open("best_model.pkl", "rb") as f:
+        model_data = pickle.load(f)
+    return model_data["model"], model_data["feature_names"]
 
-with open("scaler.pkl", "rb") as f:
-    scaler = pickle.load(f)
+@st.cache_resource
+def load_scaler():
+    with open("scaler.pkl", "rb") as f:
+        scaler = pickle.load(f)
+    return scaler
 
-# --- Connect to SQLite database (create if doesn't exist) ---
+model, feature_names = load_model()
+scaler = load_scaler()
+
+# --- Initialize SQLite Database ---
 conn = sqlite3.connect("database.db", check_same_thread=False)
 cursor = conn.cursor()
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,13 +36,12 @@ CREATE TABLE IF NOT EXISTS predictions (
 """)
 conn.commit()
 
-# --- Streamlit UI setup ---
-st.title("🔎 Loan Fraud Detection & Dashboard")
-st.sidebar.header("📊 Dashboard & Stats")
+# --- Streamlit Frontend Setup ---
+st.set_page_config(page_title="Loan Fraud Detection", page_icon="💰")
+st.title("💰 Loan Fraud Detection System")
+st.write("Enter the applicant's details below to check for potential fraud.")
 
-# --- User input form ---
-st.subheader("Enter Applicant Details to Predict Fraud")
-
+# --- User Input Form ---
 input_fields = {
     "Age": st.number_input("Age", 18, 100),
     "Occupation": st.selectbox("Occupation", ["Employed", "Self-Employed", "Unemployed"]),
@@ -47,8 +52,8 @@ input_fields = {
     "CreditScore": st.number_input("Credit Score", 300, 850),
     "IncomeLevel": st.number_input("Income Level", 0),
     "LoanAmountRequested": st.number_input("Loan Amount Requested", 0),
-    "LoanTerm": st.number_input("Loan Term (months)", 1, 360),
-    "PurposeoftheLoan": st.selectbox("Purpose of the Loan", ["Education", "Medical", "Home", "Business", "Other"]),
+    "LoanTerm": st.number_input("Loan Term (Months)", 1, 360),
+    "PurposeoftheLoan": st.selectbox("Purpose of Loan", ["Education", "Medical", "Home", "Business", "Other"]),
     "Collateral": st.selectbox("Collateral", ["Yes", "No"]),
     "InterestRate": st.number_input("Interest Rate (%)", 0.0),
     "PreviousLoans": st.number_input("Previous Loans", 0),
@@ -68,46 +73,47 @@ input_fields = {
     "Referral": st.selectbox("Referral", ["Yes", "No"])
 }
 
-# --- Predict button ---
-if st.button("Predict Fraud"):
+# --- Prediction Section ---
+if st.button("🔎 Predict Loan Fraud"):
     input_df = pd.DataFrame([input_fields])
     input_encoded = pd.get_dummies(input_df).reindex(columns=feature_names, fill_value=0)
     input_scaled = scaler.transform(input_encoded)
-    
+
     prediction = model.predict(input_scaled)[0]
     probability = model.predict_proba(input_scaled)[0][1]
-    
-    result_text = "⚠️ Fraud Detected!" if prediction == 1 else "✅ No Fraud Detected"
-    st.success(result_text)
-    st.info(f"Fraud Probability: {probability * 100:.2f}%")
 
+    if prediction == 1:
+        st.error(f"🚨 Fraud Detected! (Probability: {probability * 100:.2f}%)")
+    else:
+        st.success(f"✅ No Fraud Detected (Probability of fraud: {probability * 100:.2f}%)")
+
+    # Store prediction record in DB
     cursor.execute("""
         INSERT INTO predictions (timestamp, user_input, prediction, probability)
         VALUES (?, ?, ?, ?)
     """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), json.dumps(input_fields), str(prediction), float(probability)))
     conn.commit()
 
-# --- Sidebar Dashboard ---
-st.sidebar.write("## Total Prediction Stats")
-cursor.execute("SELECT COUNT(*) FROM predictions")
-total_preds = cursor.fetchone()[0]
-st.sidebar.write(f"Total Predictions: {total_preds}")
+# --- Sidebar for Dashboard & Analytics ---
+st.sidebar.title("📊 Dashboard")
+total_preds = cursor.execute("SELECT COUNT(*) FROM predictions").fetchone()[0]
+fraud_count = cursor.execute("SELECT COUNT(*) FROM predictions WHERE prediction='1'").fetchone()[0]
 
-cursor.execute("SELECT COUNT(*) FROM predictions WHERE prediction='1'")
-fraud_count = cursor.fetchone()[0]
-st.sidebar.write(f"Total Frauds Detected: {fraud_count}")
+st.sidebar.metric("Total Predictions", total_preds)
+st.sidebar.metric("Frauds Detected", fraud_count)
 
-if st.sidebar.button("Show Daily Fraud Trends"):
+if st.sidebar.button("📈 Show Daily Fraud Trend"):
     df = pd.read_sql("SELECT * FROM predictions", conn)
     if not df.empty:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df['date'] = df['timestamp'].dt.date
         daily_fraud = df[df['prediction'] == '1'].groupby('date').count()['id']
-        st.sidebar.line_chart(daily_fraud)  # Removed matplotlib, using Streamlit's built-in line chart
+        st.sidebar.line_chart(daily_fraud)
 
-if st.sidebar.button("View All Prediction Entries"):
+if st.sidebar.button("📃 View Prediction Records"):
     df = pd.read_sql("SELECT * FROM predictions", conn)
     st.dataframe(df)
 
-st.sidebar.write("---")
-st.sidebar.write("Made with ❤️ for L KISHORE")
+st.sidebar.markdown("---")
+st.sidebar.write("Made with ❤️ by L KISHORE")
+
