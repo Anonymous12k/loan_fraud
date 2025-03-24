@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score
 
-# ✅ Set page config (must be the first Streamlit call)
+# ✅ Set page config
 st.set_page_config(page_title="Loan Fraud Detection", page_icon="💰")
 
 # App Title
@@ -47,7 +47,7 @@ elif app_mode == "Prediction":
             X = data.drop('fraud', axis=1)
             y = data['fraud']
 
-            # Ensure all features are numeric (handle categorical)
+            # Ensure all features are numeric
             X = pd.get_dummies(X)
 
             # Train/test split
@@ -79,7 +79,7 @@ elif app_mode == "Prediction":
         else:
             st.warning("⚠️ The dataset does not contain a 'fraud' column.")
 
-# Exploratory Data Analysis Page
+# Exploratory Data Analysis Page (EDA)
 elif app_mode == "Exploratory Data Analysis":
     st.write("## Upload your dataset for EDA")
     uploaded_file_eda = st.file_uploader("Upload a CSV file for EDA", type=["csv"])
@@ -92,14 +92,7 @@ elif app_mode == "Exploratory Data Analysis":
         st.write("### Dataset Description")
         st.write(data_eda.describe())
 
-        if 'fraud' in data_eda.columns:
-            if data_eda['fraud'].dtype == 'object':
-                data_eda['fraud'] = data_eda['fraud'].map({'yes': 1, 'no': 0})
-
-            st.write("### Fraud Distribution")
-            st.bar_chart(data_eda['fraud'].value_counts())
-
-        # Correlation Heatmap
+        # Correlation Heatmap only
         st.write("### Correlation Heatmap")
         numeric_data = data_eda.select_dtypes(include=[np.number])
         if not numeric_data.empty:
