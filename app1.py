@@ -99,4 +99,4 @@ elif app_mode == "Exploratory Data Analysis":
 
 # Footer
 st.sidebar.write("---")
-st.sidebar.write("by Kishore")
+st.sidebar.write("Developed by Nithish S")
