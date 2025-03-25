@@ -13,7 +13,7 @@ st.set_page_config(page_title="Loan Fraud Detection", page_icon="💰")
 st.title("💰 Loan Fraud Detection App")
 
 st.sidebar.title("Navigation")
-app_mode = st.sidebar.selectbox("Choose the app mode", ["About", "Prediction", "Exploratory Data Analysis"])
+app_mode = st.sidebar.selectbox("Choose the app mode", ["Please select an operation", "Prediction", "Exploratory Data Analysis"])
 
 # ------------------------- About -------------------------
 if app_mode == "Please select an operation":
